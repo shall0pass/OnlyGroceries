@@ -61,6 +61,11 @@
   function toggleSidebarIfMobile() {
     if (sidebar.isMobile) {
       sidebar.toggle()
+      // Minimal patch: restore pointer events to html/body after sidebar closes
+      setTimeout(() => {
+        document.documentElement.style.pointerEvents = '';
+        document.body.style.pointerEvents = '';
+      }, 300);
     }
   }
   function onCreate() {

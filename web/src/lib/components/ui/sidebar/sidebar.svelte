@@ -21,6 +21,14 @@
 	} = $props();
 
 	const sidebar = useSidebar();
+
+	$effect(() => {
+		if (!sidebar.openMobile) {
+			// When sidebar closes on mobile, restore pointer events to html/body
+			document.documentElement.style.pointerEvents = '';
+			document.body.style.pointerEvents = '';
+		}
+	});
 </script>
 
 {#if collapsible === "none"}
