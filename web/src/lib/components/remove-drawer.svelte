@@ -18,7 +18,10 @@
 
     onRemove(drawer.specialList.id)
 
-    openPage(router, 'main')
+    // If currently viewing the deleted list, navigate to Shopping List
+    if ($router?.route === 'special' && $router.params.id === drawer.specialList.id) {
+      openPage(router, 'main')
+    }
 
     drawer.close()
     toast(`${drawer.specialList.name} has been deleted`, {

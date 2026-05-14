@@ -27,7 +27,7 @@
   }
   const { root, listId }: Props = $props()
 
-  let title = $derived($root?.specials.lists[listId].name)
+  let title = $derived($root?.specials.lists[listId]?.name ?? 'Unnamed List')
   let text = $state('')
   let editingTitle = $state(false)
   let editTitleText = $state('')
