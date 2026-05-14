@@ -325,11 +325,13 @@ function clearCompletedCartItems() {
       </details>
     {/each}
 
-    <div class="mt-6 mb-2">
-      <Button class="w-full" size="lg" onclick={clearCompletedCartItems}>
-        Clear completed items
-      </Button>
-    </div>
+    {#if cartIds.some(id => $root.items[id]?.purchased)}
+      <div class="mt-6 mb-2">
+        <Button class="w-full" size="lg" onclick={clearCompletedCartItems}>
+          Clear completed items
+        </Button>
+      </div>
+    {/if}
   </div>
 {/if}
 
