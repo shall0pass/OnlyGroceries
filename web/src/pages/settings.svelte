@@ -17,6 +17,7 @@
     replaceRootDocLinks,
     upsertRootDocLink,
     ensureDefaultRootDocLink,
+    // setRootDocLinks, (not exported)
     type RootDocLink
   } from '$src/lib/core/repo'
   import {
@@ -349,7 +350,16 @@
 
       url = parsed.syncServerUrl
       $syncServerUrl = parsed.syncServerUrl
-      savedRootLinks = replaceRootDocLinks(importedLinks)
+
+      // Merge imported links with existing, skipping duplicates by url
+      const existingLinks = getRootDocLinks()
+      const mergedLinks = [...existingLinks]
+      for (const imported of importedLinks) {
+        if (!existingLinks.some(link => link.url === imported.url)) {
+          mergedLinks.push(imported)
+        }
+      }
+      savedRootLinks = replaceRootDocLinks(mergedLinks)
       savedRootLinks = ensureDefaultRootDocLink($persistedRootUrl)
 
       const activeLink = savedRootLinks.find(link => link.url === $persistedRootUrl)
