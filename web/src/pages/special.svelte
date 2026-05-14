@@ -85,7 +85,7 @@
           kind: 'staple',
           text: item.text,
           purchased: false,
-          inCart: false
+          inCart: item.inCart
         })
       } else {
         createItem(doc, {

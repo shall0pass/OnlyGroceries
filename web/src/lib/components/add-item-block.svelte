@@ -61,10 +61,6 @@
   }
 </script>
 
-<TabsList class="grid w-full grid-cols-2">
-  <TabsTrigger class="h-8" value="staple">Staples</TabsTrigger>
-  <TabsTrigger class="h-8" value="rare">Shopping List</TabsTrigger>
-</TabsList>
 <div class="mb-4 mt-4 flex flex-col gap-1">
   <Input
     class="text-md focus-visible:ring-offset-1"

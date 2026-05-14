@@ -1,31 +1,34 @@
 <script lang="ts">
-  import '../app.css'
-  import * as Tabs from '$lib/components/ui/tabs'
-  import * as Drawer from '$lib/components/ui/drawer'
-  import { Button } from '$lib/components/ui/button'
-  import AddItemBlock from '$lib/components/add-item-block.svelte'
-  import RegularItem from '$lib/components/regular-item.svelte'
-  import CartItem from '$lib/components/cart-item.svelte'
+import '../app.css'
+import * as Tabs from '$lib/components/ui/tabs'
+import * as Drawer from '$lib/components/ui/drawer'
+import { Button } from '$lib/components/ui/button'
+import AddItemBlock from '$lib/components/add-item-block.svelte'
+import RegularItem from '$lib/components/regular-item.svelte'
+import CartItem from '$lib/components/cart-item.svelte'
 
-  import Sortable, { type SortableEvent } from 'sortablejs'
-  import { sortable } from '../sortable'
+import Sortable, { type SortableEvent } from 'sortablejs'
+import { sortable } from '../sortable'
 
-  import { type AutomergeDocumentStore } from '@automerge/automerge-repo-svelte-store'
-  import {
-    type Root,
-    type Staple,
-    isStaple,
-    type ItemKind
-  } from '$src/lib/core/types'
-  import {
-    deleteFromCart,
-    toggleInCart,
-    togglePurchased,
-    createItem,
-    deleteItem,
-    handleDnd,
-    updateItemText
-  } from '$src/lib/core'
+import { type AutomergeDocumentStore } from '@automerge/automerge-repo-svelte-store'
+import {
+  type Root,
+  type Staple,
+  isStaple,
+  type ItemKind
+} from '$src/lib/core/types'
+import {
+  deleteFromCart,
+  toggleInCart,
+  togglePurchased,
+  createItem,
+  deleteItem,
+  handleDnd,
+  updateItemText
+} from '$src/lib/core'
+
+// The pencil icon will open the move drawer for rare items
+const editItem = openMoveDrawer;
 
   interface Props {
     root: AutomergeDocumentStore<Root> | null
@@ -42,37 +45,97 @@
   let moveDrawerOpen = $state(false)
   let movingItemId = $state<string | null>(null)
 
-  let moveTargets = $derived(
-    ($root?.specials.order ?? []).map(id => ({
-      id: String(id),
-      name: $root!.specials.lists[String(id)].name
-    }))
-  )
+
+let moveTargets = $derived(() => {
+  const targets: { id: string; name: string }[] = [];
+  // Add staples as a move target
+  targets.push({ id: 'staples', name: 'Staples' });
+  // Add all special lists
+  if ($root?.specials.order) {
+    for (const id of $root.specials.order) {
+      targets.push({ id: String(id), name: $root.specials.lists[String(id)].name });
+    }
+  }
+  return targets;
+});
+
+  // Drawer edit state for moving/renaming
+  let editDrawerMode = $state(false)
+  let editDrawerText = $state('')
+
+  function startDrawerEdit() {
+    if (!movingItemId || !$root) return;
+    editDrawerText = $root.items[movingItemId]?.text || '';
+    editDrawerMode = true;
+  }
+  function commitDrawerEdit() {
+    if (!movingItemId || !$root) return;
+    const trimmed = editDrawerText.trim();
+    if (trimmed && trimmed !== $root.items[movingItemId].text) {
+      root?.change(doc => updateItemText(doc, movingItemId as string, trimmed));
+    }
+    editDrawerMode = false;
+  }
+  function cancelDrawerEdit() {
+    editDrawerMode = false;
+  }
+  function resetDrawerEdit() {
+    editDrawerMode = false;
+    editDrawerText = '';
+  }
 
   function openMoveDrawer(itemId: string) {
     movingItemId = itemId
     moveDrawerOpen = true
   }
 
-  function moveStapleTo(targetListId: string) {
-    if (!movingItemId) return
-    const id = movingItemId
+  // function moveStapleTo(targetListId: string) {
+  //   if (!movingItemId) return
+  //   const id = movingItemId
+  //   root?.change(doc => {
+  //     const item = doc.items[id]
+  //     if (!item || !isStaple(item)) return
+  //     createItem(doc, {
+  //       kind: 'special',
+  //       text: item.text,
+  //       purchased: false,
+  //       inCart: false,
+  //       specialId: targetListId
+  //     })
+  //     deleteItem(doc, id)
+  //   })
+  //   movingItemId = null
+  //   moveDrawerOpen = false
+  // }
+  function moveItemToList(targetListId: string) {
+    if (!movingItemId || !$root) return;
+    const id = movingItemId;
+    const item = $root.items[id];
+    if (!item) return;
     root?.change(doc => {
-      const item = doc.items[id]
-      if (!item || !isStaple(item)) return
-      createItem(doc, {
-        kind: 'special',
-        text: item.text,
-        purchased: false,
-        inCart: false,
-        specialId: targetListId
-      })
-      deleteItem(doc, id)
-    })
-    movingItemId = null
-    moveDrawerOpen = false
+      if (targetListId === 'staples') {
+        // Move to staples
+        createItem(doc, {
+          kind: 'staple',
+          text: item.text,
+          purchased: false,
+          inCart: true
+        });
+      } else {
+        // Move to special list
+        createItem(doc, {
+          kind: 'special',
+          text: item.text,
+          purchased: false,
+          inCart: true,
+          specialId: targetListId
+        });
+      }
+      deleteItem(doc, id);
+    });
+    movingItemId = null;
+    moveDrawerOpen = false;
   }
-
   let cartIds = $derived(
     $root?.globalOrder.filter(id => $root.items[id].inCart) || []
   )
@@ -174,135 +237,117 @@
         doc.items[sourceItemId].inCart = true
         return
       }
-
-      if (activeTab == 'staple') {
-        createItem(doc, {
-          text: text,
-          kind: 'staple',
-          inCart: false,
-          purchased: false
-        })
-      } else {
-        createItem(doc, {
-          text: text,
-          kind: 'rare',
-          inCart: true,
-          purchased: false
-        })
-      }
+      createItem(doc, {
+        text: text,
+        kind: 'rare',
+        inCart: true,
+        purchased: false
+      })
     })
   }
+
+function clearCompletedCartItems() {
+  if (!$root) return;
+  const toRemove = cartIds.filter(id => $root.items[id]?.purchased);
+  if (toRemove.length === 0) return;
+  root?.change(doc => {
+    for (const id of toRemove) {
+      deleteFromCart(doc, id);
+    }
+  });
+}
 </script>
 
 {#if $root}
   <div class="container pt-2">
-    <Tabs.Root bind:value={activeTab}>
-      <AddItemBlock
-        addToCart={addItem}
-        {activeTab}
-        suggestionSource={addItemSuggestions}
-      />
+    <AddItemBlock
+      addToCart={addItem}
+      suggestionSource={addItemSuggestions}
+      activeTab={"rare"}
+    />
 
-      <Tabs.Content value="staple">
-        <!-- #key is a workaround to prevent errors when users do dnd
-      https://github.com/sveltejs/svelte/issues/11826. it fixes "Illegal
-      invocation" bug, app crash when item drops out of the parent, when peers
-      do dnd at the same time -->
-        {#key staplesRenderKey}
-          <ul use:sortable={options} class="grid gap-2">
-            {#each staples as id, i (id)}
-              <li>
-                <RegularItem
-                  item={$root.items[id] as Staple}
-                  toggleInCart={() =>
-                    root?.change(doc => toggleInCart(doc, id))}
-                  deleteItem={() => deleteStaple(id)}
-                  updateText={(text) => root?.change(doc => updateItemText(doc, id, text))}
-                  onMoveRequest={() => openMoveDrawer(id)}
-                />
-              </li>
+    {#if regularCartIds.length > 0}
+      <details open>
+        <summary
+          class="flex cursor-pointer select-none items-center gap-2 rounded-md px-1 py-1 text-sm font-semibold text-slate-600 hover:bg-slate-100"
+        >
+          <span class="chevron">▶</span>
+          Shopping List
+          <span class="ml-auto text-xs font-normal text-slate-400"
+            >{regularCartIds.length}</span
+          >
+        </summary>
+        {#key regularCartRenderKey}
+          <ul use:sortable={options} class="mt-1 grid gap-2 pl-2">
+            {#each regularCartIds as id, i (id)}
+              <CartItem
+                {i}
+                itemId={id}
+                item={$root?.items[id]}
+                togglePurchased={() =>
+                  root?.change(doc => togglePurchased(doc, id))}
+                deleteCartItem={() =>
+                  root?.change(doc => deleteFromCart(doc, id))}
+                onEdit={openMoveDrawer}
+              />
             {/each}
           </ul>
         {/key}
-      </Tabs.Content>
+      </details>
 
-      <Tabs.Content value="rare">
-        {#if regularCartIds.length > 0}
-          <details open>
-            <summary
-              class="flex cursor-pointer select-none items-center gap-2 rounded-md px-1 py-1 text-sm font-semibold text-slate-600 hover:bg-slate-100"
-            >
-              <span class="chevron">▶</span>
-              Shopping List
-              <span class="ml-auto text-xs font-normal text-slate-400"
-                >{regularCartIds.length}</span
-              >
-            </summary>
-            {#key regularCartRenderKey}
-              <ul use:sortable={options} class="mt-1 grid gap-2 pl-2">
-                {#each regularCartIds as id, i (id)}
-                  <CartItem
-                    {i}
-                    itemId={id}
-                    item={$root?.items[id]}
-                    togglePurchased={() =>
-                      root?.change(doc => togglePurchased(doc, id))}
-                    deleteCartItem={() =>
-                      root?.change(doc => deleteFromCart(doc, id))}
-                  />
-                {/each}
-              </ul>
-            {/key}
-          </details>
-        {/if}
+    {/if}
 
-        {#each specialCartGroups as group (group.listId)}
-          <details class="mt-3" open>
-            <summary
-              class="flex cursor-pointer select-none items-center gap-2 rounded-md px-1 py-1 text-sm font-semibold text-slate-600 hover:bg-slate-100"
-            >
-              <span class="chevron">▶</span>
-              {group.name}
-              <span class="ml-auto text-xs font-normal text-slate-400"
-                >{group.ids.length}</span
-              >
-            </summary>
-            <ul class="mt-1 grid gap-2 pl-2">
-              {#each group.ids as id, i (id)}
-                <CartItem
-                  {i}
-                  itemId={id}
-                  item={$root?.items[id]}
-                  togglePurchased={() =>
-                    root?.change(doc => togglePurchased(doc, id))}
-                  deleteCartItem={() =>
-                    root?.change(doc => deleteFromCart(doc, id))}
-                />
-              {/each}
-            </ul>
-          </details>
-        {/each}
-      </Tabs.Content>
-    </Tabs.Root>
+
+    {#each specialCartGroups as group (group.listId)}
+      <details class="mt-3" open>
+        <summary
+          class="flex cursor-pointer select-none items-center gap-2 rounded-md px-1 py-1 text-sm font-semibold text-slate-600 hover:bg-slate-100"
+        >
+          <span class="chevron">▶</span>
+          {group.name}
+          <span class="ml-auto text-xs font-normal text-slate-400"
+            >{group.ids.length}</span
+          >
+        </summary>
+        <ul class="mt-1 grid gap-2 pl-2">
+          {#each group.ids as id, i (id)}
+            <CartItem
+              {i}
+              itemId={id}
+              item={$root?.items[id]}
+              togglePurchased={() =>
+                root?.change(doc => togglePurchased(doc, id))}
+              deleteCartItem={() =>
+                root?.change(doc => deleteFromCart(doc, id))}
+            />
+          {/each}
+        </ul>
+      </details>
+    {/each}
+
+    <div class="mt-6 mb-2">
+      <Button class="w-full" size="lg" onclick={clearCompletedCartItems}>
+        Clear completed items
+      </Button>
+    </div>
   </div>
 {/if}
 
 <Drawer.Root bind:open={moveDrawerOpen}>
   <Drawer.Content>
     <div class="mx-auto mb-4 w-full max-w-sm">
-      <Drawer.Header>
-        <Drawer.Title>Move to list</Drawer.Title>
-        <Drawer.Description>Choose a list to move this item to</Drawer.Description>
-      </Drawer.Header>
       <div class="flex flex-col gap-2 p-4">
-        {#each moveTargets as list}
-          <Button variant="outline" onclick={() => moveStapleTo(list.id)}>{list.name}</Button>
-        {/each}
-        <Button variant="ghost" onclick={() => { moveDrawerOpen = false }}>Cancel</Button>
+        <!-- No edit name option for shopping list drawer -->
+        <div class="mt-2 mb-2 border-t"></div>
+        <div class="mb-1 font-semibold">Move to list:</div>
+          {#each moveTargets() as list}
+            <Button variant="outline" onclick={() => moveItemToList(list.id)}>{list.name}</Button>
+          {/each}
+        <Button variant="ghost" onclick={() => { moveDrawerOpen = false; resetDrawerEdit(); }}>Cancel</Button>
       </div>
     </div>
   </Drawer.Content>
-</Drawer.Root>
+ </Drawer.Root>
 
 <style>
   :global(.ghost) {

@@ -9,6 +9,7 @@
   import Main from './pages/main.svelte'
   import Settings from './pages/settings.svelte'
   import Special from './pages/special.svelte'
+  import Staples from './pages/staples.svelte'
 
   import { router } from '$stores/router'
   import { openPage } from '@nanostores/router'
@@ -92,6 +93,8 @@
         <Main {root} />
       {:else if $router.route === 'special'}
         <Special {root} listId={$router.params.id} />
+      {:else if $router.route === 'staples'}
+        <Staples {root} />
       {:else if $router.route === 'settings'}
         <Settings {setRootId} />
       {:else}
